@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 812" preserveAspectRatio="none">
+  <defs>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="7"/>
+      <feColorMatrix type="saturate" values="0.35"/>
+      <feBlend mode="multiply" in2="SourceGraphic"/>
+    </filter>
+  </defs>
+  <rect width="1000" height="812" fill="#53665c"/>
+  <g filter="url(#noise)">
+    <rect x="0" y="0" width="1000" height="812" fill="#627268"/>
+    <rect x="0" y="0" width="70" height="812" fill="#44584d"/>
+    <rect x="905" y="0" width="95" height="812" fill="#3e5748"/>
+    <rect x="0" y="308" width="1000" height="38" fill="#b8b4a8"/>
+    <rect x="0" y="688" width="1000" height="42" fill="#b8b4a8"/>
+    <rect x="245" y="0" width="32" height="812" fill="#aaa89e"/>
+    <rect x="602" y="0" width="34" height="812" fill="#aaa89e"/>
+    <rect x="118" y="72" width="492" height="230" fill="#c0b7a5"/>
+    <rect x="118" y="366" width="492" height="285" fill="#c0b7a5"/>
+    <rect x="680" y="100" width="180" height="560" fill="#c8c0ad"/>
+    <rect x="140" y="100" width="115" height="88" fill="#7fa0cc"/>
+    <rect x="285" y="92" width="86" height="205" fill="#8db1dd"/>
+    <rect x="395" y="95" width="188" height="165" fill="#8ca6cb"/>
+    <rect x="138" y="402" width="430" height="105" fill="#7898c3"/>
+    <rect x="140" y="555" width="420" height="112" fill="#7898c3"/>
+    <rect x="704" y="140" width="134" height="190" fill="#d6d8ce"/>
+    <rect x="704" y="368" width="134" height="278" fill="#d6d8ce"/>
+    <g stroke="#e7ebea" stroke-width="5" opacity="0.55">
+      <path d="M142 430H568M142 470H568M142 590H560M142 630H560"/>
+      <path d="M710 178H830M710 220H830M710 262H830M710 420H830M710 470H830M710 520H830M710 570H830M710 620H830"/>
+    </g>
+  </g>
+</svg>
