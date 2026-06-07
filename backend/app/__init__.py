@@ -1,4 +1,4 @@
-from flask import Flask, g
+from flask import Flask, g, request
 
 from .config import Config
 from .database import SessionLocal, init_db
@@ -23,9 +23,15 @@ def create_app():
 
     @app.after_request
     def cors(resp):
-        resp.headers["Access-Control-Allow-Origin"] = app.config["CORS_ALLOW_ORIGIN"]
+        origin = request.headers.get("Origin")
+        allowed_origins = app.config["CORS_ALLOW_ORIGINS"]
+        if "*" in allowed_origins:
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+        elif origin in allowed_origins:
+            resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
         resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PATCH,DELETE,OPTIONS"
+        resp.headers["Vary"] = "Origin"
         return resp
 
     @app.get("/api/health")

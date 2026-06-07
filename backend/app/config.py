@@ -16,6 +16,19 @@ def optional_float(name):
     return float(value) if value else None
 
 
+def csv_list(name, default):
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEFAULT_CORS_ALLOW_ORIGINS = (
+    "http://127.0.0.1:5173,"
+    "http://localhost:5173,"
+    "http://127.0.0.1:8088,"
+    "http://localhost:8088"
+)
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-change-me")
     JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "86400"))
@@ -37,4 +50,5 @@ class Config:
     WECOM_CORP_ID = os.getenv("WECOM_CORP_ID", "")
     WECOM_AGENT_ID = os.getenv("WECOM_AGENT_ID", "")
     WECOM_SECRET = os.getenv("WECOM_SECRET", "")
-    CORS_ALLOW_ORIGIN = os.getenv("CORS_ALLOW_ORIGIN", "*")
+    CORS_ALLOW_ORIGIN = os.getenv("CORS_ALLOW_ORIGIN", "")
+    CORS_ALLOW_ORIGINS = sorted(set(csv_list("CORS_ALLOW_ORIGINS", DEFAULT_CORS_ALLOW_ORIGINS) + csv_list("CORS_ALLOW_ORIGIN", "")))
