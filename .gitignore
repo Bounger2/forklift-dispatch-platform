@@ -17,6 +17,7 @@ node_modules/
 dist/
 mobile/dist-android/
 mobile/.expo/
+mobile/apk/
 
 # Runtime data and logs
 *.log

@@ -65,6 +65,12 @@ E:\Project program\企业项目\无人调度车\android-env
 .\scripts\build-debug-apk.ps1 -UseProxy
 ```
 
+项目路径包含中文时，脚本会自动复制到短英文临时目录完成原生构建，避免 CMake/NDK 路径编码问题。构建成功后 APK 会导出到：
+
+```text
+mobile\apk\forklift-dispatch-debug.apk
+```
+
 连接安卓模拟器或真机后运行：
 
 ```powershell
