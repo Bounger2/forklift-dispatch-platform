@@ -27,8 +27,33 @@ npm.cmd run start
 
 ## 打包/运行安卓
 
-需要本机安装 JDK 和 Android SDK 后执行：
+已准备便携环境目录：
+
+```text
+E:\Project program\企业项目\无人调度车\android-env
+```
+
+首次安装 Android SDK 组件时需要你本人接受 Google Android SDK License：
 
 ```powershell
-npm.cmd run android
+.\scripts\install-android-sdk.ps1
+```
+
+验证移动端依赖和 Android Bundle：
+
+```powershell
+.\scripts\doctor.ps1
+```
+
+连接安卓模拟器或真机后运行：
+
+```powershell
+.\scripts\run-android.ps1
+```
+
+如果使用真机调试，请将后端地址设置为电脑局域网 IP：
+
+```powershell
+$env:EXPO_PUBLIC_API_BASE="http://你的电脑IP:5000"
+.\scripts\run-android.ps1
 ```
