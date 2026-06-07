@@ -25,6 +25,23 @@ npm.cmd install
 npm.cmd run start
 ```
 
+## 不安装 APK 预览界面
+
+浏览器预览：
+
+```powershell
+cd mobile
+npm.cmd run preview:web
+```
+
+打开：
+
+```text
+http://localhost:8088
+```
+
+这适合快速查看界面和交互，不需要安装 APK。真机上想更接近移动端效果时，也可以运行 `npm.cmd run start` 后用 Expo Go 扫码预览。
+
 ## 打包/运行安卓
 
 已准备便携环境目录：

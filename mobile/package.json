@@ -7,9 +7,11 @@
     "start": "expo start",
     "android": "expo run:android",
     "web": "expo start --web",
+    "preview:web": "expo start --web --host localhost --port 8088",
     "doctor": "expo-doctor"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",
     "expo": "^54.0.0",
     "expo-file-system": "^19.0.17",
@@ -17,7 +19,9 @@
     "expo-secure-store": "^15.0.7",
     "expo-sharing": "^14.0.7",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "babel-preset-expo": "~54.0.10",
