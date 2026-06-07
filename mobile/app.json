@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "叉车调度",
+    "slug": "forklift-dispatch-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "forkliftdispatch",
+    "userInterfaceStyle": "light",
+    "jsEngine": "jsc",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.bounger2.forkliftdispatch",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f4a3f"
+      }
+    },
+    "extra": {
+      "apiBase": "http://10.0.2.2:5000"
+    }
+  }
+}
