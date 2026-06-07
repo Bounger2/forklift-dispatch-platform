@@ -39,10 +39,30 @@ E:\Project program\企业项目\无人调度车\android-env
 .\scripts\install-android-sdk.ps1
 ```
 
+如果 SDK/NDK 下载较慢，并且本机代理为 `127.0.0.1:7890`：
+
+```powershell
+.\scripts\install-android-sdk.ps1 -UseProxy
+```
+
+脚本会安装 Expo SDK 54 当前需要的 Android 36、Build Tools 36 和 NDK 27.1。
+
 验证移动端依赖和 Android Bundle：
 
 ```powershell
 .\scripts\doctor.ps1
+```
+
+构建本地 debug APK：
+
+```powershell
+.\scripts\build-debug-apk.ps1
+```
+
+如果 Maven/Gradle 依赖下载仍然慢，并且本机代理为 `127.0.0.1:7890`：
+
+```powershell
+.\scripts\build-debug-apk.ps1 -UseProxy
 ```
 
 连接安卓模拟器或真机后运行：

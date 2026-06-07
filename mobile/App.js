@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  StatusBar,
   View,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
@@ -230,6 +231,7 @@ export default function App() {
   if (booting) {
     return (
       <SafeAreaView style={styles.center}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
         <ActivityIndicator color={colors.primary} size="large" />
         <Text style={styles.muted}>正在进入叉车调度平台</Text>
       </SafeAreaView>
@@ -239,6 +241,7 @@ export default function App() {
   if (!user) {
     return (
       <SafeAreaView style={styles.login}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primaryDark} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.loginCard}>
           <View style={styles.brand}>
             <Text style={styles.brandLogo}>FD</Text>
@@ -274,6 +277,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.shell}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
       <View style={styles.topBar}>
         <View>
           <Text style={styles.pageTitle}>{tabs.find((item) => item[0] === tab)?.[1] || '调度平台'}</Text>
@@ -336,6 +340,17 @@ function OverviewScreen({ overview, tasks, alerts }) {
   const pending = tasks.filter((task) => ['pending_dispatch', 'assigned'].includes(task.status))
   return (
     <View>
+      <HeroBanner
+        eyebrow="管理员移动运行台"
+        title="中天海缆厂区调度"
+        subtitle="集中查看叉车 GPS、任务池、异常闭环和司机当天作业分布。"
+        icon="forklift"
+        stats={[
+          ['在线叉车', metrics.onlineForklifts ?? 0],
+          ['待处理', pending.length],
+          ['开放异常', metrics.openAlerts ?? 0],
+        ]}
+      />
       <View style={styles.statsGrid}>
         <StatCard label="今日任务" value={metrics.todayTasks ?? 0} sub={`完成率 ${metrics.completionRate ?? 0}%`} />
         <StatCard label="执行中" value={metrics.executingTasks ?? 0} sub="已派单/运输中" />
@@ -765,9 +780,11 @@ function AlertsScreen({ alerts, onChanged }) {
 function DriverHome({ user, report, vehicles, onChanged }) {
   const rows = report.rows || report.drivers || []
   const mine = rows[0] || {}
+  const shiftStatus = user.driver?.shiftStatus || user.driver?.shift_status
+  const online = shiftStatus === 'on_shift'
+  const bindStatus = user.driver?.bindStatus || user.driver?.bind_status || '未绑定'
   async function toggleOnline() {
-    const current = user.driver?.shiftStatus || user.driver?.shift_status
-    await api.patch('/api/driver/status', { shiftStatus: current === 'on_shift' ? 'off_shift' : 'on_shift' })
+    await api.patch('/api/driver/status', { shiftStatus: online ? 'off_shift' : 'on_shift' })
     await onChanged()
   }
   async function requestForklift(vehicle) {
@@ -776,14 +793,25 @@ function DriverHome({ user, report, vehicles, onChanged }) {
   }
   return (
     <View>
+      <HeroBanner
+        eyebrow={online ? '已上线' : '离线'}
+        title={`${user.name}的工作台`}
+        subtitle={`绑定状态：${bindStatus}。上线后可接收管理员派单，也可以申请空闲叉车。`}
+        icon={online ? 'account-check-outline' : 'account-clock-outline'}
+        stats={[
+          ['完成任务', mine.completedTasks || 0],
+          ['总公里', `${mine.totalDistance || 0}`],
+          ['作业分钟', mine.workingMinutes || 0],
+        ]}
+      />
       <Card title="我的工作台">
         <View style={styles.statsGrid}>
           <StatCard label="完成任务" value={mine.completedTasks || 0} sub="当前周期" />
           <StatCard label="总公里数" value={`${mine.totalDistance || 0}`} sub="km" />
           <StatCard label="作业时长" value={`${mine.workingMinutes || 0}`} sub="分钟" />
-          <StatCard label="状态" value={(user.driver?.shiftStatus || user.driver?.shift_status) === 'on_shift' ? '在线' : '离线'} sub={user.driver?.bindStatus || user.driver?.bind_status || '未绑定'} />
+          <StatCard label="状态" value={online ? '在线' : '离线'} sub={bindStatus} />
         </View>
-        <ActionButton label="切换上下线" icon="power" onPress={toggleOnline} />
+        <ActionButton label={online ? '下线' : '上线'} icon="power" onPress={toggleOnline} />
         <BarChart rows={rows} valueKey="completedTasks" labelKey="driverName" />
       </Card>
       <Card title="可申请空闲叉车">
@@ -965,6 +993,31 @@ function BarChart({ rows, valueKey, labelKey }) {
   )
 }
 
+function HeroBanner({ eyebrow, title, subtitle, icon, stats }) {
+  return (
+    <View style={styles.hero}>
+      <View style={styles.heroTop}>
+        <View style={styles.heroIcon}>
+          <MaterialCommunityIcons name={icon} size={28} color="#fff" />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.heroEyebrow}>{eyebrow}</Text>
+          <Text style={styles.heroTitle}>{title}</Text>
+        </View>
+      </View>
+      <Text style={styles.heroSub}>{subtitle}</Text>
+      <View style={styles.heroStats}>
+        {stats.map(([label, value]) => (
+          <View key={label} style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{value}</Text>
+            <Text style={styles.heroStatLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 function Card({ title, children }) {
   return (
     <View style={styles.card}>
@@ -1080,7 +1133,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 14, paddingBottom: 110 },
   tabBar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', backgroundColor: colors.card, borderRadius: 18, padding: 8, ...shadow },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, gap: 2 },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 52, paddingVertical: 7, borderRadius: 12, gap: 2 },
   tabItemActive: { backgroundColor: colors.soft },
   tabLabel: { fontSize: 12, color: colors.muted },
   tabLabelActive: { color: colors.primary, fontWeight: '700' },
@@ -1088,6 +1141,16 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, marginBottom: 10 },
   muted: { color: colors.muted },
   tiny: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
+  hero: { backgroundColor: colors.primaryDark, borderRadius: 20, padding: 16, marginBottom: 12, ...shadow },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  heroEyebrow: { color: '#bfe5dc', fontSize: 12, fontWeight: '800' },
+  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 3 },
+  heroSub: { color: '#d9eee9', lineHeight: 20, marginTop: 12 },
+  heroStats: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  heroStat: { flex: 1, backgroundColor: 'rgba(255,255,255,.12)', borderRadius: 14, padding: 10 },
+  heroStatValue: { color: '#fff', fontWeight: '900', fontSize: 19 },
+  heroStatLabel: { color: '#d9eee9', fontSize: 11, marginTop: 4 },
   card: { backgroundColor: colors.card, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.line, ...shadow },
   cardTitle: { fontSize: 18, fontWeight: '800', color: colors.ink, marginBottom: 10 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

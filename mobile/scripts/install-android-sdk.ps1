@@ -1,5 +1,6 @@
 param(
-  [string]$EnvRoot = ""
+  [string]$EnvRoot = "",
+  [switch]$UseProxy
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +19,18 @@ Write-Host "This step installs Android SDK components and requires accepting the
 Write-Host "If you accept the license terms shown by sdkmanager, type y when prompted."
 Write-Host ""
 
-& $sdkManager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+$packages = @(
+  "platform-tools",
+  "platforms;android-36",
+  "build-tools;36.0.0",
+  "ndk;27.1.12297006"
+)
+
+if ($UseProxy) {
+  & $sdkManager --proxy=http --proxy_host=127.0.0.1 --proxy_port=7890 $packages
+} else {
+  & $sdkManager $packages
+}
 
 Write-Host ""
 Write-Host "Android SDK install finished."
