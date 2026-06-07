@@ -114,6 +114,12 @@ function makeOptions(rows, labelKey = 'name') {
   return rows.map((row) => ({ label: row[labelKey] || row.code || row.username, value: String(row.id) }))
 }
 
+function searchBlob(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value !== 'object') return String(value)
+  return Object.values(value).map(searchBlob).join(' ')
+}
+
 export default function App() {
   const [booting, setBooting] = useState(true)
   const [user, setUser] = useState(null)
@@ -385,7 +391,9 @@ function TaskScreen({ points, tasks, vehicles, onChanged }) {
   const [mapPick, setMapPick] = useState('origin')
   const [draftPoints, setDraftPoints] = useState({ origin: null, dest: null })
   const [filter, setFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
   const filtered = tasks.filter((task) => filter === 'all' || task.status === filter)
+    .filter((task) => priorityFilter === 'all' || task.priority === priorityFilter)
 
   useEffect(() => {
     if (!form.originPointId && points[0]) setForm((old) => ({ ...old, originPointId: String(points[0].id) }))
@@ -454,17 +462,25 @@ function TaskScreen({ points, tasks, vehicles, onChanged }) {
       </Card>
       <Card title="任务池">
         <Segment value={filter} onChange={setFilter} items={[['all', '全部'], ['pending_dispatch', '待派'], ['assigned', '待接'], ['completed', '完成']]} />
-        {filtered.map((task) => (
-          <TaskRow key={task.id} task={task}>
-            <View style={styles.rowActions}>
-              <ActionChip label="自动派单" onPress={() => dispatch(task)} disabled={task.status !== 'pending_dispatch'} />
-              {vehicles.filter((v) => v.status === 'idle' && v.online).slice(0, 2).map((vehicle) => (
-                <ActionChip key={vehicle.id} label={vehicle.code} onPress={() => dispatch(task, vehicle.id)} disabled={task.status !== 'pending_dispatch'} />
-              ))}
-              <ActionChip label="完成" onPress={() => complete(task)} disabled={task.status === 'completed'} />
-            </View>
-          </TaskRow>
-        ))}
+        <Segment value={priorityFilter} onChange={setPriorityFilter} items={[['all', '全部优先级'], ['S', 'S'], ['A', 'A'], ['B', 'B'], ['C', 'C']]} />
+        <DataList
+          title="任务列表"
+          items={filtered}
+          searchPlaceholder="搜索工单/路线/货物/司机/叉车"
+          itemKey={(task) => task.id}
+          searchableText={(task) => searchBlob(task)}
+          renderItem={(task) => (
+            <TaskRow task={task}>
+              <View style={styles.rowActions}>
+                <ActionChip label="自动派单" onPress={() => dispatch(task)} disabled={task.status !== 'pending_dispatch'} />
+                {vehicles.filter((v) => v.status === 'idle' && v.online).slice(0, 2).map((vehicle) => (
+                  <ActionChip key={vehicle.id} label={vehicle.code} onPress={() => dispatch(task, vehicle.id)} disabled={task.status !== 'pending_dispatch'} />
+                ))}
+                <ActionChip label="完成" onPress={() => complete(task)} disabled={task.status === 'completed'} />
+              </View>
+            </TaskRow>
+          )}
+        />
       </Card>
     </View>
   )
@@ -498,6 +514,11 @@ function ManageScreen({ panel, setPanel, points, vehicles, drivers, rules, sched
 function PointManager({ points, onChanged }) {
   const [form, setForm] = useState(emptyPointForm)
   const [editingId, setEditingId] = useState(null)
+  const [typeFilter, setTypeFilter] = useState('all')
+  const filteredPoints = points.filter((row) => {
+    const type = row.pointType || row.point_type
+    return typeFilter === 'all' || type === typeFilter
+  })
   async function save() {
     if (editingId) await api.patch(`/api/map-points/${editingId}`, form)
     else await api.post('/api/map-points', form)
@@ -526,17 +547,24 @@ function PointManager({ points, onChanged }) {
         <Field label="经度" value={String(form.lng)} keyboardType="numeric" onChangeText={(lng) => setForm({ ...form, lng })} />
       </View>
       <ActionButton label={editingId ? '保存修改' : '保存点位'} icon="content-save" onPress={save} />
-      <ListTitle title="点位列表" count={points.length} />
-      {points.map((row) => (
-        <View key={row.id} style={styles.listRow}>
-          <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{row.name}</Text>
-            <Text style={styles.rowSub}>{row.area} · X {row.x} / Y {row.y}</Text>
+      <Segment value={typeFilter} onChange={setTypeFilter} items={[['all', '全部点位'], ['pickup', '取货点'], ['dropoff', '送货点'], ['handover', '交接点']]} />
+      <DataList
+        title="点位列表"
+        items={filteredPoints}
+        searchPlaceholder="搜索点位名称/区域/联系人"
+        itemKey={(row) => row.id}
+        searchableText={(row) => searchBlob(row)}
+        renderItem={(row) => (
+          <View style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle}>{row.name}</Text>
+              <Text style={styles.rowSub}>{row.area} · X {row.x} / Y {row.y}</Text>
+            </View>
+            <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyPointForm, ...row, pointType: row.pointType || row.point_type || 'pickup', geofenceRadius: String(row.geofenceRadius || 5), x: String(row.x), y: String(row.y), lat: row.lat ? String(row.lat) : '', lng: row.lng ? String(row.lng) : '' }) }} />
+            <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
           </View>
-          <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyPointForm, ...row, pointType: row.pointType || row.point_type || 'pickup', geofenceRadius: String(row.geofenceRadius || 5), x: String(row.x), y: String(row.y), lat: row.lat ? String(row.lat) : '', lng: row.lng ? String(row.lng) : '' }) }} />
-          <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
-        </View>
-      ))}
+        )}
+      />
     </Card>
   )
 }
@@ -544,6 +572,12 @@ function PointManager({ points, onChanged }) {
 function VehicleManager({ vehicles, onChanged }) {
   const [form, setForm] = useState(emptyVehicleForm)
   const [editingId, setEditingId] = useState(null)
+  const [vehicleFilter, setVehicleFilter] = useState('all')
+  const filteredVehicles = vehicles.filter((row) => {
+    if (vehicleFilter === 'all') return true
+    if (vehicleFilter === 'electric' || vehicleFilter === 'diesel' || vehicleFilter === 'gasoline') return (row.powerType || row.power_type) === vehicleFilter
+    return row.status === vehicleFilter
+  })
   async function save() {
     if (editingId) await api.patch(`/api/vehicles/${editingId}`, form)
     else await api.post('/api/vehicles', form)
@@ -567,18 +601,25 @@ function VehicleManager({ vehicles, onChanged }) {
         <Field label="油量%" value={form.fuelLevel} keyboardType="numeric" onChangeText={(fuelLevel) => setForm({ ...form, fuelLevel })} />
       </View>
       <ActionButton label={editingId ? '保存修改' : '新增叉车'} icon="forklift" onPress={save} />
-      <ListTitle title="叉车台账" count={vehicles.length} />
-      {vehicles.map((row) => (
-        <View key={row.id} style={styles.listRow}>
-          <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{row.code}</Text>
-            <Text style={styles.rowSub}>{row.powerType || row.power_type} · {row.tonnage}T · {statusLabel(row.status)}</Text>
+      <Segment value={vehicleFilter} onChange={setVehicleFilter} items={[['all', '全部'], ['idle', '空闲'], ['assigned', '已绑定'], ['low_battery', '低电'], ['maintenance', '维修'], ['electric', '电动'], ['diesel', '柴油'], ['gasoline', '油叉']]} />
+      <DataList
+        title="叉车台账"
+        items={filteredVehicles}
+        searchPlaceholder="搜索编号/动力/状态/区域"
+        itemKey={(row) => row.id}
+        searchableText={(row) => searchBlob(row)}
+        renderItem={(row) => (
+          <View style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle}>{row.code}</Text>
+              <Text style={styles.rowSub}>{row.powerType || row.power_type} · {row.tonnage}T · {statusLabel(row.status)}</Text>
+            </View>
+            <Badge text={`${row.batteryLevel ?? row.battery_level ?? row.fuelLevel ?? row.fuel_level ?? 0}%`} />
+            <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyVehicleForm, ...row, code: row.code, powerType: row.powerType || row.power_type || 'electric', batteryLevel: String(row.batteryLevel ?? row.battery_level ?? 0), fuelLevel: String(row.fuelLevel ?? row.fuel_level ?? 0), tonnage: String(row.tonnage || 3) }) }} />
+            <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
           </View>
-          <Badge text={`${row.batteryLevel ?? row.battery_level ?? row.fuelLevel ?? row.fuel_level ?? 0}%`} />
-          <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyVehicleForm, ...row, code: row.code, powerType: row.powerType || row.power_type || 'electric', batteryLevel: String(row.batteryLevel ?? row.battery_level ?? 0), fuelLevel: String(row.fuelLevel ?? row.fuel_level ?? 0), tonnage: String(row.tonnage || 3) }) }} />
-          <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
-        </View>
-      ))}
+        )}
+      />
     </Card>
   )
 }
@@ -610,23 +651,32 @@ function RuleManager({ rules, onChanged }) {
       </View>
       <Field label="说明" value={form.description} onChangeText={(description) => setForm({ ...form, description })} />
       <ActionButton label="新增规则" icon="plus" onPress={create} />
-      {filtered.map((rule) => (
-        <View key={rule.id} style={styles.listRow}>
-          <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{rule.name}</Text>
-            <Text style={styles.rowSub}>{rule.category} · 权重 {rule.weight} · 优先级 {rule.priority}</Text>
+      <DataList
+        title="规则列表"
+        items={filtered}
+        searchPlaceholder="搜索规则名称/分类/类型/说明"
+        itemKey={(rule) => rule.id}
+        searchableText={(rule) => searchBlob(rule)}
+        renderItem={(rule) => (
+          <View style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle}>{rule.name}</Text>
+              <Text style={styles.rowSub}>{rule.category} · 权重 {rule.weight} · 优先级 {rule.priority}</Text>
+            </View>
+            <Badge text={rule.enabled ? '启用' : '停用'} tone={rule.enabled ? 'ok' : 'muted'} />
+            <ActionChip label={rule.enabled ? '停用' : '启用'} onPress={() => toggle(rule)} />
+            {rule.editable && <ActionChip label="删除" tone="danger" onPress={() => remove(rule)} />}
           </View>
-          <Badge text={rule.enabled ? '启用' : '停用'} tone={rule.enabled ? 'ok' : 'muted'} />
-          <ActionChip label={rule.enabled ? '停用' : '启用'} onPress={() => toggle(rule)} />
-          {rule.editable && <ActionChip label="删除" tone="danger" onPress={() => remove(rule)} />}
-        </View>
-      ))}
+        )}
+      />
     </Card>
   )
 }
 
 function ScheduleManager({ drivers, vehicles, schedules, onChanged }) {
   const [form, setForm] = useState({ driverId: '', forkliftId: '', shiftCode: 'DAY', area: '全厂', status: 'scheduled' })
+  const [bindingFilter, setBindingFilter] = useState('all')
+  const bindings = (schedules.bindings || []).filter((row) => bindingFilter === 'all' || row.status === bindingFilter)
   useEffect(() => {
     if (!form.driverId && drivers[0]) setForm((old) => ({ ...old, driverId: String(drivers[0].id) }))
     if (!form.forkliftId && vehicles[0]) setForm((old) => ({ ...old, forkliftId: String(vehicles[0].id) }))
@@ -651,16 +701,23 @@ function ScheduleManager({ drivers, vehicles, schedules, onChanged }) {
         <ActionButton label="新增排班" icon="calendar-plus" onPress={createAssignment} compact />
         <ActionButton label="立即绑定" icon="link-variant" onPress={bindVehicle} compact />
       </View>
-      <ListTitle title="当前绑定" count={schedules.bindings?.length || 0} />
-      {(schedules.bindings || []).slice(0, 30).map((row) => (
-        <View key={row.id} style={styles.listRow}>
-          <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{row.driverName || row.driver?.name || '司机'} / {row.forkliftCode || row.forklift?.code || '叉车'}</Text>
-            <Text style={styles.rowSub}>{row.shiftCode || row.shift_code} · {statusLabel(row.status)}</Text>
+      <Segment value={bindingFilter} onChange={setBindingFilter} items={[['all', '全部绑定'], ['active', '生效中'], ['closed', '已解绑']]} />
+      <DataList
+        title="当前绑定"
+        items={bindings}
+        searchPlaceholder="搜索司机/叉车/班次"
+        itemKey={(row) => row.id}
+        searchableText={(row) => searchBlob(row)}
+        renderItem={(row) => (
+          <View style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle}>{row.driverName || row.driver?.name || '司机'} / {row.forkliftCode || row.forklift?.code || '叉车'}</Text>
+              <Text style={styles.rowSub}>{row.shiftCode || row.shift_code} · {statusLabel(row.status)}</Text>
+            </View>
+            {row.status === 'active' && <ActionChip label="解绑" onPress={() => closeBinding(row)} />}
           </View>
-          {row.status === 'active' && <ActionChip label="解绑" onPress={() => closeBinding(row)} />}
-        </View>
-      ))}
+        )}
+      />
     </Card>
   )
 }
@@ -668,6 +725,8 @@ function ScheduleManager({ drivers, vehicles, schedules, onChanged }) {
 function UserManager({ users, onChanged }) {
   const [form, setForm] = useState(emptyUserForm)
   const [editingId, setEditingId] = useState(null)
+  const [roleFilter, setRoleFilter] = useState('all')
+  const filteredUsers = users.filter((row) => roleFilter === 'all' || row.role === roleFilter)
   async function save() {
     if (editingId) await api.patch(`/api/users/${editingId}`, form)
     else await api.post('/api/users', form)
@@ -691,17 +750,24 @@ function UserManager({ users, onChanged }) {
         <Field label="企业微信UserID" value={form.wecomUserId} onChangeText={(wecomUserId) => setForm({ ...form, wecomUserId })} />
       </View>
       <ActionButton label={editingId ? '保存修改' : '新增用户'} icon="account-plus" onPress={save} />
-      <ListTitle title="账号列表" count={users.length} />
-      {users.map((row) => (
-        <View key={row.id} style={styles.listRow}>
-          <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{row.name}</Text>
-            <Text style={styles.rowSub}>{row.username} · {row.role} · {row.team || row.department}</Text>
+      <Segment value={roleFilter} onChange={setRoleFilter} items={[['all', '全部账号'], ['admin', '管理员'], ['driver', '司机']]} />
+      <DataList
+        title="账号列表"
+        items={filteredUsers}
+        searchPlaceholder="搜索姓名/账号/工号/班组"
+        itemKey={(row) => row.id}
+        searchableText={(row) => searchBlob(row)}
+        renderItem={(row) => (
+          <View style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle}>{row.name}</Text>
+              <Text style={styles.rowSub}>{row.username} · {row.role} · {row.team || row.department}</Text>
+            </View>
+            <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyUserForm, ...row, employeeNo: row.driver?.employeeNo || row.driver?.employee_no || '' }) }} />
+            <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
           </View>
-          <ActionChip label="编辑" onPress={() => { setEditingId(row.id); setForm({ ...emptyUserForm, ...row, employeeNo: row.driver?.employeeNo || row.driver?.employee_no || '' }) }} />
-          <ActionChip label="删除" tone="danger" onPress={() => remove(row)} />
-        </View>
-      ))}
+        )}
+      />
     </Card>
   )
 }
@@ -728,16 +794,23 @@ function ReportsScreen({ period, setPeriod, report }) {
         <ActionButton label="导出 CSV" icon="download" onPress={exportCsv} />
       </Card>
       <Card title="明细">
-        {rows.map((row, index) => (
-          <View key={`${row.driverId || index}`} style={styles.listRow}>
-            <View style={styles.flex}>
-              <Text style={styles.rowTitle}>{row.driverName || row.name}</Text>
-              <Text style={styles.rowSub}>{row.team || '-'} · {row.workingMinutes || 0} 分钟</Text>
+        <DataList
+          title="司机明细"
+          items={rows}
+          searchPlaceholder="搜索司机/班组"
+          itemKey={(row, index) => row.driverId || index}
+          searchableText={(row) => searchBlob(row)}
+          renderItem={(row) => (
+            <View style={styles.listRow}>
+              <View style={styles.flex}>
+                <Text style={styles.rowTitle}>{row.driverName || row.name}</Text>
+                <Text style={styles.rowSub}>{row.team || '-'} · {row.workingMinutes || 0} 分钟</Text>
+              </View>
+              <Badge text={`${row.completedTasks || 0} 单`} />
+              <Badge text={`${row.totalDistance || 0} km`} />
             </View>
-            <Badge text={`${row.completedTasks || 0} 单`} />
-            <Badge text={`${row.totalDistance || 0} km`} />
-          </View>
-        ))}
+          )}
+        />
       </Card>
     </View>
   )
@@ -762,17 +835,24 @@ function AlertsScreen({ alerts, onChanged }) {
     <Card title="异常闭环中心">
       <Segment value={severity} onChange={setSeverity} items={[['all', '全部'], ['critical', '严重'], ['warning', '预警'], ['info', '信息']]} />
       <ActionButton label="批量关闭已选" icon="check-all" onPress={closeBatch} />
-      {filtered.map((item) => (
-        <Pressable key={item.id} style={[styles.alertCard, selected[item.id] && styles.alertSelected]} onPress={() => setSelected({ ...selected, [item.id]: !selected[item.id] })}>
-          <View style={styles.rowActions}>
-            <Badge text={item.severity} tone={item.severity === 'critical' ? 'danger' : 'warning'} />
-            <ActionChip label="关闭" onPress={() => closeOne(item)} />
-          </View>
-          <Text style={styles.rowTitle}>{item.title}</Text>
-          <Text style={styles.rowSub}>{item.message}</Text>
-          <Text style={styles.tiny}>{item.suggestion}</Text>
-        </Pressable>
-      ))}
+      <DataList
+        title="异常列表"
+        items={filtered}
+        searchPlaceholder="搜索标题/消息/建议"
+        itemKey={(item) => item.id}
+        searchableText={(item) => searchBlob(item)}
+        renderItem={(item) => (
+          <Pressable style={[styles.alertCard, selected[item.id] && styles.alertSelected]} onPress={() => setSelected({ ...selected, [item.id]: !selected[item.id] })}>
+            <View style={styles.rowActions}>
+              <Badge text={item.severity} tone={item.severity === 'critical' ? 'danger' : 'warning'} />
+              <ActionChip label="关闭" onPress={() => closeOne(item)} />
+            </View>
+            <Text style={styles.rowTitle}>{item.title}</Text>
+            <Text style={styles.rowSub}>{item.message}</Text>
+            <Text style={styles.tiny}>{item.suggestion}</Text>
+          </Pressable>
+        )}
+      />
     </Card>
   )
 }
@@ -816,15 +896,22 @@ function DriverHome({ user, report, vehicles, onChanged }) {
       </Card>
       <Card title="可申请空闲叉车">
         <MapCard vehicles={vehicles.filter((vehicle) => vehicle.status === 'idle' && vehicle.online)} points={[]} tasks={[]} />
-        {vehicles.filter((vehicle) => vehicle.status === 'idle' && vehicle.online).map((vehicle) => (
-          <View key={vehicle.id} style={styles.listRow}>
-            <View style={styles.flex}>
-              <Text style={styles.rowTitle}>{vehicle.code}</Text>
-              <Text style={styles.rowSub}>{vehicle.currentArea || vehicle.current_area} · X {vehicle.currentX || vehicle.current_x}</Text>
+        <DataList
+          title="空闲叉车"
+          items={vehicles.filter((vehicle) => vehicle.status === 'idle' && vehicle.online)}
+          searchPlaceholder="搜索叉车编号/区域/动力"
+          itemKey={(vehicle) => vehicle.id}
+          searchableText={(vehicle) => searchBlob(vehicle)}
+          renderItem={(vehicle) => (
+            <View style={styles.listRow}>
+              <View style={styles.flex}>
+                <Text style={styles.rowTitle}>{vehicle.code}</Text>
+                <Text style={styles.rowSub}>{vehicle.currentArea || vehicle.current_area} · X {vehicle.currentX || vehicle.current_x}</Text>
+              </View>
+              <ActionChip label="申请" onPress={() => requestForklift(vehicle)} />
             </View>
-            <ActionChip label="申请" onPress={() => requestForklift(vehicle)} />
-          </View>
-        ))}
+          )}
+        />
       </Card>
     </View>
   )
@@ -832,6 +919,8 @@ function DriverHome({ user, report, vehicles, onChanged }) {
 
 function DriverTasksScreen({ tasks, onChanged }) {
   const [reasons, setReasons] = useState({})
+  const [filter, setFilter] = useState('all')
+  const filteredTasks = tasks.filter((task) => filter === 'all' || task.status === filter)
   async function accept(task) {
     await api.post(`/api/tasks/${task.id}/driver-accept`, {})
     await onChanged()
@@ -851,20 +940,28 @@ function DriverTasksScreen({ tasks, onChanged }) {
   }
   return (
     <Card title="我的任务">
-      {tasks.map((task) => (
-        <TaskRow key={task.id} task={task}>
-          {task.status === 'assigned' && (
-            <View>
-              <Field label="拒绝原因" value={reasons[task.id] || ''} onChangeText={(value) => setReasons({ ...reasons, [task.id]: value })} />
-              <View style={styles.rowActions}>
-                <ActionChip label="接受" onPress={() => accept(task)} />
-                <ActionChip label="拒绝" tone="danger" onPress={() => reject(task)} />
+      <Segment value={filter} onChange={setFilter} items={[['all', '全部'], ['assigned', '待确认'], ['in_progress', '执行中'], ['completed', '已完成'], ['rejected', '已拒绝']]} />
+      <DataList
+        title="任务列表"
+        items={filteredTasks}
+        searchPlaceholder="搜索工单/路线/货物"
+        itemKey={(task) => task.id}
+        searchableText={(task) => searchBlob(task)}
+        renderItem={(task) => (
+          <TaskRow task={task}>
+            {task.status === 'assigned' && (
+              <View>
+                <Field label="拒绝原因" value={reasons[task.id] || ''} onChangeText={(value) => setReasons({ ...reasons, [task.id]: value })} />
+                <View style={styles.rowActions}>
+                  <ActionChip label="接受" onPress={() => accept(task)} />
+                  <ActionChip label="拒绝" tone="danger" onPress={() => reject(task)} />
+                </View>
               </View>
-            </View>
-          )}
-          {task.status !== 'completed' && task.status !== 'assigned' && <ActionButton label="确认完成" icon="check" onPress={() => complete(task)} />}
-        </TaskRow>
-      ))}
+            )}
+            {task.status !== 'completed' && task.status !== 'assigned' && <ActionButton label="确认完成" icon="check" onPress={() => complete(task)} />}
+          </TaskRow>
+        )}
+      />
     </Card>
   )
 }
@@ -1108,6 +1205,73 @@ function Badge({ text, tone, color }) {
   )
 }
 
+function DataList({
+  title,
+  items,
+  renderItem,
+  itemKey,
+  searchableText = searchBlob,
+  searchPlaceholder = '搜索',
+  pageSizeDefault = 8,
+  maxHeight = 420,
+}) {
+  const [query, setQuery] = useState('')
+  const [pageSize, setPageSize] = useState(String(pageSizeDefault))
+  const [page, setPage] = useState(1)
+  const normalizedQuery = query.trim().toLowerCase()
+  const filtered = useMemo(() => {
+    if (!normalizedQuery) return items
+    return items.filter((item) => searchableText(item).toLowerCase().includes(normalizedQuery))
+  }, [items, normalizedQuery, searchableText])
+  const size = Math.max(1, Number(pageSize) || pageSizeDefault)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / size))
+  const currentPage = Math.min(page, totalPages)
+  const start = (currentPage - 1) * size
+  const pageItems = filtered.slice(start, start + size)
+
+  useEffect(() => {
+    setPage(1)
+  }, [normalizedQuery, pageSize, items.length])
+
+  return (
+    <View style={styles.dataList}>
+      <ListTitle title={title} count={filtered.length} total={items.length} />
+      <View style={styles.listTools}>
+        <View style={styles.searchBox}>
+          <MaterialCommunityIcons name="magnify" size={18} color={colors.muted} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={searchPlaceholder}
+            placeholderTextColor="#91a39e"
+            style={styles.searchInput}
+          />
+        </View>
+        <View style={styles.pageSizeWrap}>
+          <PickerLike
+            label="每页"
+            value={pageSize}
+            options={['5', '8', '10', '20'].map((value) => ({ label: `${value}条`, value }))}
+            onChange={setPageSize}
+          />
+        </View>
+      </View>
+      <ScrollView style={[styles.listScroll, { maxHeight }]} nestedScrollEnabled showsVerticalScrollIndicator>
+        {pageItems.length ? pageItems.map((item, index) => (
+          <View key={itemKey ? itemKey(item, start + index) : start + index}>
+            {renderItem(item, start + index)}
+          </View>
+        )) : <Text style={styles.emptyText}>暂无匹配数据</Text>}
+      </ScrollView>
+      <View style={styles.pagination}>
+        <ActionChip label="上一页" disabled={currentPage <= 1} onPress={() => setPage((old) => Math.max(1, old - 1))} />
+        <Text style={styles.pageText}>{currentPage} / {totalPages}</Text>
+        <ActionChip label="下一页" disabled={currentPage >= totalPages} onPress={() => setPage((old) => Math.min(totalPages, old + 1))} />
+      </View>
+    </View>
+  )
+}
+
 function ListTitle({ title, count }) {
   return (
     <View style={styles.listTitle}>
@@ -1181,6 +1345,15 @@ const styles = StyleSheet.create({
   badgeMuted: { backgroundColor: '#edf1ef' },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.line },
   listTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  dataList: { marginTop: 8 },
+  listTools: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
+  searchBox: { flex: 1, minHeight: 46, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fbfdfc', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10 },
+  searchInput: { flex: 1, minHeight: 42, color: colors.ink },
+  pageSizeWrap: { width: 96 },
+  listScroll: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, backgroundColor: '#fbfdfc', paddingHorizontal: 10 },
+  emptyText: { color: colors.muted, textAlign: 'center', paddingVertical: 22 },
+  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10 },
+  pageText: { minWidth: 58, textAlign: 'center', color: colors.ink, fontWeight: '800' },
   flex: { flex: 1 },
   rowTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, lineHeight: 21 },
   rowSub: { color: colors.ink, lineHeight: 20, marginTop: 2 },
