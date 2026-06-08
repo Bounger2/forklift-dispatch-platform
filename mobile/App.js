@@ -27,7 +27,9 @@ const SATELLITE_CENTER_LAT = 31.9438027
 const SATELLITE_CENTER_LNG = 120.9854705
 const SATELLITE_ZOOM = 17
 const TILE_SIZE = 256
-const WEB_MAP_ASPECT_RATIO = 0.99
+const WEB_MAP_WIDTH = 920
+const WEB_MAP_HEIGHT = 720
+const MOBILE_MAP_PAN_FACTOR = 1.55
 
 const emptyTaskForm = {
   originPointId: '',
@@ -1105,8 +1107,12 @@ function MineScreen({ user, report, signOut }) {
 }
 
 function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onPick, extraMarkers = [] }) {
-  const [size, setSize] = useState({ width: 360, height: Math.round(360 / WEB_MAP_ASPECT_RATIO) })
-  const satelliteTiles = useMemo(() => buildSatelliteTiles(size.width, size.height), [size.width, size.height])
+  const [viewport, setViewport] = useState({ width: 360, height: 360 })
+  const contentWidth = Math.max(viewport.width, Math.min(WEB_MAP_WIDTH, viewport.width * MOBILE_MAP_PAN_FACTOR))
+  const contentHeight = Math.round((WEB_MAP_HEIGHT / WEB_MAP_WIDTH) * contentWidth)
+  const mapScale = contentWidth / WEB_MAP_WIDTH
+  const surfaceSize = useMemo(() => ({ width: contentWidth, height: contentHeight }), [contentWidth, contentHeight])
+  const satelliteTiles = useMemo(() => buildSatelliteTiles(WEB_MAP_WIDTH, WEB_MAP_HEIGHT), [])
   const taskPoints = tasks.flatMap((task) => [
     task.origin && { ...task.origin, label: '取', tone: 'primary' },
     task.destination && { ...task.destination, label: '送', tone: 'warning' },
@@ -1130,44 +1136,63 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
 
   return (
     <Card title="厂区地图">
-      <Pressable
-        style={styles.mapWrap}
-        onLayout={(event) => setSize(event.nativeEvent.layout)}
-        onPress={(event) => {
-          if (!pickMode || !onPick) return
-          const picked = resolveMapPick(event, size)
-          if (picked) onPick(picked)
+      <View
+        style={styles.mapViewport}
+        onLayout={(event) => {
+          const next = event.nativeEvent.layout
+          if (next.width && next.height) setViewport({ width: next.width, height: next.height })
         }}
       >
-        <View style={styles.mapTileLayer}>
-          {satelliteTiles.map((tile) => (
-            <Image
-              key={tile.key}
-              source={{ uri: tile.url }}
-              style={[styles.mapTile, { left: tile.left, top: tile.top }]}
-              resizeMode="cover"
-            />
-          ))}
-        </View>
-        <View style={styles.mapMarkerLayer}>
-          {markers.map((marker, index) => (
-            <View
-              key={`${marker.label}-${index}`}
-              style={[
-                styles.marker,
-                {
-                  left: `${Number(marker.x)}%`,
-                  top: `${Number(marker.y)}%`,
-                  backgroundColor: marker.tone === 'warning' ? colors.warning : marker.tone === 'vehicle' ? colors.primary : colors.blue,
-                },
-              ]}
+        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator style={styles.mapScroll}>
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.mapScroll}>
+            <Pressable
+              style={[styles.mapSurface, { width: contentWidth, height: contentHeight }]}
+              onPress={(event) => {
+                if (!pickMode || !onPick) return
+                const picked = resolveMapPick(event, surfaceSize)
+                if (picked) onPick(picked)
+              }}
             >
-              <Text style={styles.markerText}>{marker.label}</Text>
-            </View>
-          ))}
-        </View>
-      </Pressable>
-      {pickMode && <Text style={styles.tiny}>点击地图即可取 X/Y 坐标，保存后由后端统一换算/定位。</Text>}
+              <View style={styles.mapTileLayer}>
+                {satelliteTiles.map((tile) => (
+                  <Image
+                    key={tile.key}
+                    source={{ uri: tile.url }}
+                    style={[
+                      styles.mapTile,
+                      {
+                        left: tile.left * mapScale,
+                        top: tile.top * mapScale,
+                        width: TILE_SIZE * mapScale,
+                        height: TILE_SIZE * mapScale,
+                      },
+                    ]}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+              <View style={styles.mapMarkerLayer}>
+                {markers.map((marker, index) => (
+                  <View
+                    key={`${marker.label}-${index}`}
+                    style={[
+                      styles.marker,
+                      {
+                        left: `${Number(marker.x)}%`,
+                        top: `${Number(marker.y)}%`,
+                        backgroundColor: marker.tone === 'warning' ? colors.warning : marker.tone === 'vehicle' ? colors.primary : colors.blue,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.markerText}>{marker.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </Pressable>
+          </ScrollView>
+        </ScrollView>
+      </View>
+      <Text style={styles.tiny}>{pickMode ? '拖动地图查看左右厂区，点击地图即可取 X/Y 坐标。' : '拖动地图查看左右厂区，点位与 Web 端使用同一 GPS/百分比坐标。'}</Text>
     </Card>
   )
 }
@@ -1502,7 +1527,9 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, lineHeight: 21 },
   rowSub: { color: colors.ink, lineHeight: 20, marginTop: 2 },
   taskCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fbfdfc' },
-  mapWrap: { width: '100%', aspectRatio: WEB_MAP_ASPECT_RATIO, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5', position: 'relative' },
+  mapViewport: { height: 380, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5', position: 'relative', borderWidth: 1, borderColor: colors.line },
+  mapScroll: { flex: 1 },
+  mapSurface: { position: 'relative', backgroundColor: '#dfe6e1' },
   mapTileLayer: { ...StyleSheet.absoluteFillObject },
   mapTile: { position: 'absolute', width: TILE_SIZE, height: TILE_SIZE },
   mapMarkerLayer: { ...StyleSheet.absoluteFillObject },
