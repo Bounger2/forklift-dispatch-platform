@@ -120,6 +120,71 @@ function searchBlob(value) {
   return Object.values(value).map(searchBlob).join(' ')
 }
 
+function safeNumber(value, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+function optionalNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, value))
+}
+
+function coordFrom(...values) {
+  for (const value of values) {
+    const number = optionalNumber(value)
+    if (number !== null) return clampPercent(number)
+  }
+  return null
+}
+
+function reportTaskCount(row = {}) {
+  if (row.taskCount !== undefined && row.taskCount !== null) return safeNumber(row.taskCount)
+  if (Array.isArray(row.completedTasks)) return row.completedTasks.length
+  return safeNumber(row.completedTasks)
+}
+
+function normalizeReportRow(row = {}) {
+  return {
+    ...row,
+    driverName: row.driverName || row.name || '司机',
+    completedCount: reportTaskCount(row),
+    totalDistanceValue: safeNumber(row.totalDistance),
+    workingMinutesValue: safeNumber(row.totalMinutes ?? row.workingMinutes),
+    avgDistanceValue: safeNumber(row.avgDistance),
+  }
+}
+
+function normalizeReportRows(report = {}) {
+  return (report.rows || report.drivers || []).map(normalizeReportRow)
+}
+
+function resolveMapPick(event, size) {
+  const nativeEvent = event.nativeEvent || {}
+  let locationX = optionalNumber(nativeEvent.locationX)
+  let locationY = optionalNumber(nativeEvent.locationY)
+
+  if ((locationX === null || locationY === null) && event.currentTarget?.getBoundingClientRect) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const clientX = optionalNumber(nativeEvent.clientX ?? nativeEvent.pageX)
+    const clientY = optionalNumber(nativeEvent.clientY ?? nativeEvent.pageY)
+    if (clientX !== null && clientY !== null) {
+      locationX = clientX - rect.left
+      locationY = clientY - rect.top
+    }
+  }
+
+  if (locationX === null || locationY === null || !size.width || !size.height) return null
+  return {
+    x: +clampPercent((locationX / size.width) * 100).toFixed(2),
+    y: +clampPercent((locationY / size.height) * 100).toFixed(2),
+  }
+}
+
 export default function App() {
   const [booting, setBooting] = useState(true)
   const [user, setUser] = useState(null)
@@ -784,10 +849,10 @@ function UserManager({ users, onChanged }) {
 }
 
 function ReportsScreen({ period, setPeriod, report }) {
-  const rows = report.rows || report.drivers || []
+  const rows = normalizeReportRows(report)
   async function exportCsv() {
     const header = ['司机', '班组', '完成任务', '总公里数', '作业时长', '单均公里']
-    const body = rows.map((row) => [row.driverName || row.name, row.team, row.completedTasks, row.totalDistance, row.workingMinutes, row.avgDistance])
+    const body = rows.map((row) => [row.driverName, row.team, row.completedCount, row.totalDistanceValue, row.workingMinutesValue, row.avgDistanceValue])
     const csv = [header, ...body].map((line) => line.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
     const uri = `${FileSystem.cacheDirectory}driver-report-${period}.csv`
     await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 })
@@ -801,7 +866,7 @@ function ReportsScreen({ period, setPeriod, report }) {
     <View>
       <Card title="司机工作报表">
         <Segment value={period} onChange={setPeriod} items={[['day', '日'], ['week', '周'], ['month', '月'], ['quarter', '季'], ['year', '年']]} />
-        <BarChart rows={rows} valueKey="completedTasks" labelKey="driverName" />
+        <BarChart rows={rows} valueKey="completedCount" labelKey="driverName" />
         <ActionButton label="导出 CSV" icon="download" onPress={exportCsv} />
       </Card>
       <Card title="明细">
@@ -814,11 +879,11 @@ function ReportsScreen({ period, setPeriod, report }) {
           renderItem={(row) => (
             <View style={styles.listRow}>
               <View style={styles.flex}>
-                <Text style={styles.rowTitle}>{row.driverName || row.name}</Text>
-                <Text style={styles.rowSub}>{row.team || '-'} · {row.workingMinutes || 0} 分钟</Text>
+                <Text style={styles.rowTitle}>{row.driverName}</Text>
+                <Text style={styles.rowSub}>{row.team || '-'} · {row.workingMinutesValue} 分钟</Text>
               </View>
-              <Badge text={`${row.completedTasks || 0} 单`} />
-              <Badge text={`${row.totalDistance || 0} km`} />
+              <Badge text={`${row.completedCount} 单`} />
+              <Badge text={`${row.totalDistanceValue} km`} />
             </View>
           )}
         />
@@ -869,7 +934,7 @@ function AlertsScreen({ alerts, onChanged }) {
 }
 
 function DriverHome({ user, report, vehicles, onChanged }) {
-  const rows = report.rows || report.drivers || []
+  const rows = normalizeReportRows(report)
   const mine = rows[0] || {}
   const shiftStatus = user.driver?.shiftStatus || user.driver?.shift_status
   const online = shiftStatus === 'on_shift'
@@ -890,20 +955,20 @@ function DriverHome({ user, report, vehicles, onChanged }) {
         subtitle={`绑定状态：${bindStatus}。上线后可接收管理员派单，也可以申请空闲叉车。`}
         icon={online ? 'account-check-outline' : 'account-clock-outline'}
         stats={[
-          ['完成任务', mine.completedTasks || 0],
-          ['总公里', `${mine.totalDistance || 0}`],
-          ['作业分钟', mine.workingMinutes || 0],
+          ['完成任务', mine.completedCount || 0],
+          ['总公里', `${mine.totalDistanceValue || 0}`],
+          ['作业分钟', mine.workingMinutesValue || 0],
         ]}
       />
       <Card title="我的工作台">
         <View style={styles.statsGrid}>
-          <StatCard label="完成任务" value={mine.completedTasks || 0} sub="当前周期" />
-          <StatCard label="总公里数" value={`${mine.totalDistance || 0}`} sub="km" />
-          <StatCard label="作业时长" value={`${mine.workingMinutes || 0}`} sub="分钟" />
+          <StatCard label="完成任务" value={mine.completedCount || 0} sub="当前周期" />
+          <StatCard label="总公里数" value={`${mine.totalDistanceValue || 0}`} sub="km" />
+          <StatCard label="作业时长" value={`${mine.workingMinutesValue || 0}`} sub="分钟" />
           <StatCard label="状态" value={online ? '在线' : '离线'} sub={bindStatus} />
         </View>
         <ActionButton label={online ? '下线' : '上线'} icon="power" onPress={toggleOnline} />
-        <BarChart rows={rows} valueKey="completedTasks" labelKey="driverName" />
+        <BarChart rows={rows} valueKey="completedCount" labelKey="driverName" />
       </Card>
       <Card title="可申请空闲叉车">
         <MapCard vehicles={vehicles.filter((vehicle) => vehicle.status === 'idle' && vehicle.online)} points={[]} tasks={[]} />
@@ -978,7 +1043,7 @@ function DriverTasksScreen({ tasks, onChanged }) {
 }
 
 function MineScreen({ user, report, signOut }) {
-  const mine = (report.rows || report.drivers || [])[0] || {}
+  const mine = normalizeReportRows(report)[0] || {}
   return (
     <View>
       <Card title="个人信息">
@@ -987,7 +1052,7 @@ function MineScreen({ user, report, signOut }) {
         <Text style={styles.rowSub}>企业微信：{user.wecomUserId || user.wecom_user_id || '-'}</Text>
       </Card>
       <Card title="工作统计">
-        <BarChart rows={[mine]} valueKey="completedTasks" labelKey="driverName" />
+        <BarChart rows={mine.driverName ? [mine] : []} valueKey="completedCount" labelKey="driverName" />
       </Card>
       <ActionButton label="退出登录" icon="logout" tone="danger" onPress={signOut} />
     </View>
@@ -1001,11 +1066,21 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
     task.destination && { ...task.destination, label: '送', tone: 'warning' },
   ]).filter(Boolean)
   const markers = [
-    ...points.map((point) => ({ x: point.x, y: point.y, label: point.pointType === 'dropoff' || point.point_type === 'dropoff' ? '送' : '取', tone: 'point' })),
-    ...vehicles.map((vehicle) => ({ x: vehicle.currentX ?? vehicle.current_x, y: vehicle.currentY ?? vehicle.current_y, label: vehicle.code?.replace('FLC-', '') || '车', tone: 'vehicle' })),
-    ...taskPoints,
-    ...extraMarkers,
-  ].filter((item) => item.x !== undefined && item.y !== undefined)
+    ...points.map((point) => ({
+      x: coordFrom(point.x, point.mapX, point.map_x),
+      y: coordFrom(point.y, point.mapY, point.map_y),
+      label: point.pointType === 'dropoff' || point.point_type === 'dropoff' ? '送' : '取',
+      tone: 'point',
+    })),
+    ...vehicles.map((vehicle) => ({
+      x: coordFrom(vehicle.currentX, vehicle.current_x, vehicle.x),
+      y: coordFrom(vehicle.currentY, vehicle.current_y, vehicle.y),
+      label: vehicle.code?.replace('FLC-', '') || '车',
+      tone: 'vehicle',
+    })),
+    ...taskPoints.map((point) => ({ ...point, x: coordFrom(point.x, point.mapX, point.map_x), y: coordFrom(point.y, point.mapY, point.map_y) })),
+    ...extraMarkers.map((point) => ({ ...point, x: coordFrom(point.x, point.mapX, point.map_x), y: coordFrom(point.y, point.mapY, point.map_y) })),
+  ].filter((item) => item.x !== null && item.y !== null)
 
   return (
     <Card title="厂区地图">
@@ -1014,11 +1089,11 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
         onLayout={(event) => setSize(event.nativeEvent.layout)}
         onPress={(event) => {
           if (!pickMode || !onPick) return
-          const { locationX, locationY } = event.nativeEvent
-          onPick({ x: +(locationX / size.width * 100).toFixed(2), y: +(locationY / size.height * 100).toFixed(2) })
+          const picked = resolveMapPick(event, size)
+          if (picked) onPick(picked)
         }}
       >
-        <ImageBackground source={{ uri: `${API_BASE}/api/basemap/image` }} style={styles.mapImage} resizeMode="cover">
+        <ImageBackground source={{ uri: `${API_BASE}/api/basemap/image` }} style={styles.mapImage} resizeMode="stretch">
           {markers.map((marker, index) => (
             <View
               key={`${marker.label}-${index}`}
@@ -1081,12 +1156,12 @@ function Gantt({ rows }) {
 }
 
 function BarChart({ rows, valueKey, labelKey }) {
-  const max = Math.max(1, ...rows.map((row) => Number(row[valueKey] || 0)))
+  const max = Math.max(1, ...rows.map((row) => safeNumber(row[valueKey])))
   if (!rows.length) return <Text style={styles.muted}>暂无报表数据</Text>
   return (
     <View style={styles.chart}>
       {rows.slice(0, 8).map((row, index) => {
-        const value = Number(row[valueKey] || 0)
+        const value = safeNumber(row[valueKey])
         return (
           <View key={row.driverId || index} style={styles.barRow}>
             <Text style={styles.barName}>{row[labelKey] || row.name || '司机'}</Text>
