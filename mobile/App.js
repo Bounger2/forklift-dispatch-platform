@@ -21,15 +21,15 @@ import * as FileSystem from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
 
 import { API_BASE, api, restoreToken, setToken } from './src/api'
+import { OFFLINE_TILE_SOURCES } from './src/offlineTiles'
 import { colors, shadow } from './src/theme'
 
-const FACTORY_MAP_IMAGE = require('./assets/factory-satellite.png')
 const SATELLITE_CENTER_LAT = 31.9438027
 const SATELLITE_CENTER_LNG = 120.9854705
 const SATELLITE_ZOOM = 17
 const TILE_SIZE = 256
-const WEB_MAP_WIDTH = 802
-const WEB_MAP_HEIGHT = 759
+const WEB_MAP_WIDTH = 1002
+const WEB_MAP_HEIGHT = 748
 const MOBILE_MAP_PAN_FACTOR = 1.55
 const STATUS_BAR_TOP = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0
 const BOTTOM_SAFE_SPACE = Platform.OS === 'android' ? 18 : 12
@@ -271,10 +271,12 @@ function buildSatelliteTiles(width, height) {
       if (y < 0 || y >= tileCount) continue
       const wrappedX = ((x % tileCount) + tileCount) % tileCount
       const server = Math.abs(x + y) % 4
+      const key = `${zoom}-${wrappedX}-${y}`
       tiles.push({
-        key: `${zoom}-${wrappedX}-${y}`,
+        key,
         left: Math.round(x * TILE_SIZE - originX),
         top: Math.round(y * TILE_SIZE - originY),
+        source: OFFLINE_TILE_SOURCES[key] || { uri: `https://mt${server}.google.com/vt/lyrs=s&x=${wrappedX}&y=${y}&z=${zoom}` },
         url: `https://mt${server}.google.com/vt/lyrs=s&x=${wrappedX}&y=${y}&z=${zoom}`,
       })
     }
@@ -1198,7 +1200,9 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
   const [viewport, setViewport] = useState({ width: 360, height: 360 })
   const contentWidth = Math.max(viewport.width, Math.min(WEB_MAP_WIDTH, viewport.width * MOBILE_MAP_PAN_FACTOR))
   const contentHeight = Math.round((WEB_MAP_HEIGHT / WEB_MAP_WIDTH) * contentWidth)
+  const mapScale = contentWidth / WEB_MAP_WIDTH
   const surfaceSize = useMemo(() => ({ width: contentWidth, height: contentHeight }), [contentWidth, contentHeight])
+  const satelliteTiles = useMemo(() => buildSatelliteTiles(WEB_MAP_WIDTH, WEB_MAP_HEIGHT), [])
   const taskPoints = tasks.flatMap((task) => [
     task.origin && { ...task.origin, label: '取', tone: 'primary' },
     task.destination && { ...task.destination, label: '送', tone: 'warning' },
@@ -1264,7 +1268,22 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
               }}
             >
               <View style={styles.mapTileLayer}>
-                <Image source={FACTORY_MAP_IMAGE} style={styles.mapOfflineImage} resizeMode="stretch" />
+                {satelliteTiles.map((tile) => (
+                  <Image
+                    key={tile.key}
+                    source={tile.source}
+                    style={[
+                      styles.mapTile,
+                      {
+                        left: tile.left * mapScale,
+                        top: tile.top * mapScale,
+                        width: TILE_SIZE * mapScale,
+                        height: TILE_SIZE * mapScale,
+                      },
+                    ]}
+                    resizeMode="cover"
+                  />
+                ))}
               </View>
               <View style={styles.mapMarkerLayer}>
                 {markers.map((marker, index) => (
@@ -1626,7 +1645,6 @@ const styles = StyleSheet.create({
   mapScroll: { flex: 1 },
   mapSurface: { position: 'relative', backgroundColor: '#dfe6e1' },
   mapTileLayer: { ...StyleSheet.absoluteFillObject },
-  mapOfflineImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   mapTile: { position: 'absolute', width: TILE_SIZE, height: TILE_SIZE },
   mapMarkerLayer: { ...StyleSheet.absoluteFillObject },
   marker: { position: 'absolute', width: 34, height: 26, marginLeft: -17, marginTop: -13, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
