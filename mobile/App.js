@@ -27,8 +27,8 @@ const SATELLITE_CENTER_LAT = 31.9438027
 const SATELLITE_CENTER_LNG = 120.9854705
 const SATELLITE_ZOOM = 17
 const TILE_SIZE = 256
-const WEB_MAP_WIDTH = 920
-const WEB_MAP_HEIGHT = 720
+const WEB_MAP_WIDTH = 1002
+const WEB_MAP_HEIGHT = 748
 const MOBILE_MAP_PAN_FACTOR = 1.55
 
 const emptyTaskForm = {
@@ -1143,8 +1143,8 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
           if (next.width && next.height) setViewport({ width: next.width, height: next.height })
         }}
       >
-        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator style={styles.mapScroll}>
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.mapScroll}>
+        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} persistentScrollbar={false} style={styles.mapScroll}>
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} persistentScrollbar={false} style={styles.mapScroll}>
             <Pressable
               style={[styles.mapSurface, { width: contentWidth, height: contentHeight }]}
               onPress={(event) => {
