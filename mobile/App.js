@@ -27,6 +27,7 @@ const SATELLITE_CENTER_LAT = 31.9438027
 const SATELLITE_CENTER_LNG = 120.9854705
 const SATELLITE_ZOOM = 17
 const TILE_SIZE = 256
+const WEB_MAP_ASPECT_RATIO = 0.99
 
 const emptyTaskForm = {
   originPointId: '',
@@ -1104,7 +1105,7 @@ function MineScreen({ user, report, signOut }) {
 }
 
 function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onPick, extraMarkers = [] }) {
-  const [size, setSize] = useState({ width: 1, height: 260 })
+  const [size, setSize] = useState({ width: 360, height: Math.round(360 / WEB_MAP_ASPECT_RATIO) })
   const satelliteTiles = useMemo(() => buildSatelliteTiles(size.width, size.height), [size.width, size.height])
   const taskPoints = tasks.flatMap((task) => [
     task.origin && { ...task.origin, label: '取', tone: 'primary' },
@@ -1501,7 +1502,7 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, lineHeight: 21 },
   rowSub: { color: colors.ink, lineHeight: 20, marginTop: 2 },
   taskCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fbfdfc' },
-  mapWrap: { height: 260, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5', position: 'relative' },
+  mapWrap: { width: '100%', aspectRatio: WEB_MAP_ASPECT_RATIO, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5', position: 'relative' },
   mapTileLayer: { ...StyleSheet.absoluteFillObject },
   mapTile: { position: 'absolute', width: TILE_SIZE, height: TILE_SIZE },
   mapMarkerLayer: { ...StyleSheet.absoluteFillObject },
