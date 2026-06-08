@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "forkliftdispatch",
     "userInterfaceStyle": "light",
-    "jsEngine": "jsc",
+    "jsEngine": "hermes",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -19,7 +19,7 @@
       }
     },
     "extra": {
-      "apiBase": "http://10.0.2.2:5000"
+      "apiBase": "http://192.168.123.151:5000"
     }
   }
 }

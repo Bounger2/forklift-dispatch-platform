@@ -279,7 +279,43 @@ function buildSatelliteTiles(width, height) {
   return tiles
 }
 
+class MobileErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error) {
+    console.warn('Mobile startup error', error)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <SafeAreaView style={{ flex: 1, padding: 18, justifyContent: 'center', backgroundColor: colors.bg }}>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 10 }}>应用启动异常</Text>
+          <Text style={{ color: colors.muted, lineHeight: 22 }}>请确认后端服务已启动，并使用最新 release APK。错误信息：</Text>
+          <Text style={{ color: colors.danger, lineHeight: 22, marginTop: 10 }}>{String(this.state.error?.message || this.state.error)}</Text>
+        </SafeAreaView>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export default function App() {
+  return (
+    <MobileErrorBoundary>
+      <DispatchApp />
+    </MobileErrorBoundary>
+  )
+}
+
+function DispatchApp() {
   const [booting, setBooting] = useState(true)
   const [user, setUser] = useState(null)
   const [loginForm, setLoginForm] = useState({ username: 'admin', password: '123456' })

@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 
 const TOKEN_KEY = 'dispatch_token'
-const DEFAULT_BASE = Platform.OS === 'web' ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000'
+const DEFAULT_BASE = Platform.OS === 'web' ? 'http://127.0.0.1:5000' : 'http://192.168.123.151:5000'
 export const API_BASE = process.env.EXPO_PUBLIC_API_BASE || DEFAULT_BASE
 
 let authToken = ''
