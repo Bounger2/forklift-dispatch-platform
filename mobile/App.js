@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  ImageBackground,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,6 +22,11 @@ import * as Sharing from 'expo-sharing'
 
 import { API_BASE, api, restoreToken, setToken } from './src/api'
 import { colors, shadow } from './src/theme'
+
+const SATELLITE_CENTER_LAT = 31.9438027
+const SATELLITE_CENTER_LNG = 120.9854705
+const SATELLITE_ZOOM = 17
+const TILE_SIZE = 256
 
 const emptyTaskForm = {
   originPointId: '',
@@ -183,6 +188,45 @@ function resolveMapPick(event, size) {
     x: +clampPercent((locationX / size.width) * 100).toFixed(2),
     y: +clampPercent((locationY / size.height) * 100).toFixed(2),
   }
+}
+
+function latLngToWorldPixel(lat, lng, zoom = SATELLITE_ZOOM) {
+  const safeLat = Math.max(-85.05112878, Math.min(85.05112878, lat))
+  const sinLat = Math.sin((safeLat * Math.PI) / 180)
+  const scale = TILE_SIZE * 2 ** zoom
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  }
+}
+
+function buildSatelliteTiles(width, height) {
+  if (!width || !height) return []
+  const zoom = SATELLITE_ZOOM
+  const tileCount = 2 ** zoom
+  const center = latLngToWorldPixel(SATELLITE_CENTER_LAT, SATELLITE_CENTER_LNG, zoom)
+  const originX = center.x - width / 2
+  const originY = center.y - height / 2
+  const startX = Math.floor(originX / TILE_SIZE)
+  const endX = Math.floor((originX + width) / TILE_SIZE)
+  const startY = Math.floor(originY / TILE_SIZE)
+  const endY = Math.floor((originY + height) / TILE_SIZE)
+  const tiles = []
+
+  for (let x = startX; x <= endX; x += 1) {
+    for (let y = startY; y <= endY; y += 1) {
+      if (y < 0 || y >= tileCount) continue
+      const wrappedX = ((x % tileCount) + tileCount) % tileCount
+      const server = Math.abs(x + y) % 4
+      tiles.push({
+        key: `${zoom}-${wrappedX}-${y}`,
+        left: Math.round(x * TILE_SIZE - originX),
+        top: Math.round(y * TILE_SIZE - originY),
+        url: `https://mt${server}.google.com/vt/lyrs=s&x=${wrappedX}&y=${y}&z=${zoom}`,
+      })
+    }
+  }
+  return tiles
 }
 
 export default function App() {
@@ -1060,7 +1104,8 @@ function MineScreen({ user, report, signOut }) {
 }
 
 function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onPick, extraMarkers = [] }) {
-  const [size, setSize] = useState({ width: 1, height: 1 })
+  const [size, setSize] = useState({ width: 1, height: 260 })
+  const satelliteTiles = useMemo(() => buildSatelliteTiles(size.width, size.height), [size.width, size.height])
   const taskPoints = tasks.flatMap((task) => [
     task.origin && { ...task.origin, label: '取', tone: 'primary' },
     task.destination && { ...task.destination, label: '送', tone: 'warning' },
@@ -1093,7 +1138,17 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
           if (picked) onPick(picked)
         }}
       >
-        <ImageBackground source={{ uri: `${API_BASE}/api/basemap/image` }} style={styles.mapImage} resizeMode="stretch">
+        <View style={styles.mapTileLayer}>
+          {satelliteTiles.map((tile) => (
+            <Image
+              key={tile.key}
+              source={{ uri: tile.url }}
+              style={[styles.mapTile, { left: tile.left, top: tile.top }]}
+              resizeMode="cover"
+            />
+          ))}
+        </View>
+        <View style={styles.mapMarkerLayer}>
           {markers.map((marker, index) => (
             <View
               key={`${marker.label}-${index}`}
@@ -1109,7 +1164,7 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
               <Text style={styles.markerText}>{marker.label}</Text>
             </View>
           ))}
-        </ImageBackground>
+        </View>
       </Pressable>
       {pickMode && <Text style={styles.tiny}>点击地图即可取 X/Y 坐标，保存后由后端统一换算/定位。</Text>}
     </Card>
@@ -1446,8 +1501,10 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, lineHeight: 21 },
   rowSub: { color: colors.ink, lineHeight: 20, marginTop: 2 },
   taskCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fbfdfc' },
-  mapWrap: { height: 260, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5' },
-  mapImage: { flex: 1 },
+  mapWrap: { height: 260, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfe8e5', position: 'relative' },
+  mapTileLayer: { ...StyleSheet.absoluteFillObject },
+  mapTile: { position: 'absolute', width: TILE_SIZE, height: TILE_SIZE },
+  mapMarkerLayer: { ...StyleSheet.absoluteFillObject },
   marker: { position: 'absolute', width: 34, height: 26, marginLeft: -17, marginTop: -13, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   markerText: { color: '#fff', fontWeight: '900', fontSize: 11 },
   segment: { marginBottom: 12 },
