@@ -51,7 +51,7 @@
       :key="point.id"
       class="point-marker"
       :class="[`point-marker--${point.pointType}`, { 'point-marker--active': point.active }]"
-      :style="{ left: `${point.x}%`, top: `${point.y}%` }"
+      :style="markerStyle(point)"
       :title="`${point.name} | ${point.area}`"
       @click.stop="$emit('select-point', point)"
     >
@@ -63,7 +63,7 @@
       :key="vehicle.id"
       class="vehicle-marker"
       :class="[`vehicle-marker--${vehicle.status}`, { 'vehicle-marker--offline': !vehicle.online }]"
-      :style="{ left: `${vehicle.x}%`, top: `${vehicle.y}%` }"
+      :style="markerStyle(vehicle)"
       :title="vehicleTitle(vehicle)"
       @click.stop="$emit('select-vehicle', vehicle)"
     >
@@ -74,7 +74,7 @@
     <div
       v-if="draftPoint"
       class="draft-point"
-      :style="{ left: `${draftPoint.x}%`, top: `${draftPoint.y}%` }"
+      :style="markerStyle(draftPoint)"
     ></div>
 
     <button
@@ -210,6 +210,42 @@ function mapPixelToLatLng(localX, localY, width, height) {
   const mercatorN = Math.PI - (2 * Math.PI * worldY) / scale
   const lat = (180 / Math.PI) * Math.atan(Math.sinh(mercatorN))
   return { lat, lng }
+}
+
+function optionalNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = optionalNumber(value)
+    if (number !== null) return number
+  }
+  return null
+}
+
+function latLngToMapPercent(lat, lng, width, height) {
+  const center = latLngToWorldPixel(props.centerLat, props.centerLng, props.zoom)
+  const point = latLngToWorldPixel(lat, lng, props.zoom)
+  const originX = center.x - width / 2
+  const originY = center.y - height / 2
+  return {
+    x: Math.max(0, Math.min(100, ((point.x - originX) / width) * 100)),
+    y: Math.max(0, Math.min(100, ((point.y - originY) / height) * 100)),
+  }
+}
+
+function markerStyle(entity) {
+  const lat = firstNumber(entity.currentLat, entity.current_lat, entity.lat, entity.latitude)
+  const lng = firstNumber(entity.currentLng, entity.current_lng, entity.lng, entity.longitude)
+  if (lat !== null && lng !== null && !(lat === 0 && lng === 0)) {
+    const mapped = latLngToMapPercent(lat, lng, mapWidth.value, mapHeight.value)
+    return { left: `${mapped.x}%`, top: `${mapped.y}%` }
+  }
+  const x = firstNumber(entity.currentX, entity.current_x, entity.x, entity.mapX, entity.map_x) ?? 0
+  const y = firstNumber(entity.currentY, entity.current_y, entity.y, entity.mapY, entity.map_y) ?? 0
+  return { left: `${x}%`, top: `${y}%` }
 }
 
 function pointSymbol(type) {

@@ -150,6 +150,14 @@ function coordFrom(...values) {
   return null
 }
 
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = optionalNumber(value)
+    if (number !== null) return number
+  }
+  return null
+}
+
 function reportTaskCount(row = {}) {
   if (row.taskCount !== undefined && row.taskCount !== null) return safeNumber(row.taskCount)
   if (Array.isArray(row.completedTasks)) return row.completedTasks.length
@@ -187,9 +195,14 @@ function resolveMapPick(event, size) {
   }
 
   if (locationX === null || locationY === null || !size.width || !size.height) return null
+  const x = clampPercent((locationX / size.width) * 100)
+  const y = clampPercent((locationY / size.height) * 100)
+  const latLng = mapPixelToLatLng((x / 100) * WEB_MAP_WIDTH, (y / 100) * WEB_MAP_HEIGHT, WEB_MAP_WIDTH, WEB_MAP_HEIGHT)
   return {
-    x: +clampPercent((locationX / size.width) * 100).toFixed(2),
-    y: +clampPercent((locationY / size.height) * 100).toFixed(2),
+    x: +x.toFixed(2),
+    y: +y.toFixed(2),
+    lat: +latLng.lat.toFixed(7),
+    lng: +latLng.lng.toFixed(7),
   }
 }
 
@@ -201,6 +214,40 @@ function latLngToWorldPixel(lat, lng, zoom = SATELLITE_ZOOM) {
     x: ((lng + 180) / 360) * scale,
     y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
   }
+}
+
+function mapPixelToLatLng(localX, localY, width, height) {
+  const zoom = SATELLITE_ZOOM
+  const scale = TILE_SIZE * 2 ** zoom
+  const center = latLngToWorldPixel(SATELLITE_CENTER_LAT, SATELLITE_CENTER_LNG, zoom)
+  const worldX = center.x - width / 2 + localX
+  const worldY = center.y - height / 2 + localY
+  const lng = (worldX / scale) * 360 - 180
+  const mercatorN = Math.PI - (2 * Math.PI * worldY) / scale
+  const lat = (180 / Math.PI) * Math.atan(Math.sinh(mercatorN))
+  return { lat, lng }
+}
+
+function latLngToMapPercent(lat, lng, width = WEB_MAP_WIDTH, height = WEB_MAP_HEIGHT) {
+  const point = latLngToWorldPixel(lat, lng, SATELLITE_ZOOM)
+  const center = latLngToWorldPixel(SATELLITE_CENTER_LAT, SATELLITE_CENTER_LNG, SATELLITE_ZOOM)
+  const originX = center.x - width / 2
+  const originY = center.y - height / 2
+  return {
+    x: clampPercent(((point.x - originX) / width) * 100),
+    y: clampPercent(((point.y - originY) / height) * 100),
+  }
+}
+
+function markerPosition({ xValues = [], yValues = [], latValues = [], lngValues = [] }) {
+  const lat = firstNumber(...latValues)
+  const lng = firstNumber(...lngValues)
+  if (lat !== null && lng !== null && !(lat === 0 && lng === 0)) {
+    return latLngToMapPercent(lat, lng)
+  }
+  const x = coordFrom(...xValues)
+  const y = coordFrom(...yValues)
+  return x !== null && y !== null ? { x, y } : { x: null, y: null }
 }
 
 function buildSatelliteTiles(width, height) {
@@ -532,6 +579,8 @@ function TaskScreen({ points, tasks, vehicles, onChanged }) {
       area: '临时任务',
       x: draft.x,
       y: draft.y,
+      lat: draft.lat,
+      lng: draft.lng,
       geofenceRadius: 5,
       temporary: true,
     })
@@ -655,7 +704,7 @@ function PointManager({ points, onChanged }) {
   }
   return (
     <Card title={editingId ? '修改取送货点' : '新增取送货点'}>
-      <MapCard points={points} vehicles={[]} tasks={[]} pickMode onPick={(point) => setForm({ ...form, x: String(point.x), y: String(point.y) })} />
+      <MapCard points={points} vehicles={[]} tasks={[]} pickMode onPick={(point) => setForm({ ...form, x: String(point.x), y: String(point.y), lat: String(point.lat || ''), lng: String(point.lng || '') })} />
       <Field label="名称" value={form.name} onChangeText={(name) => setForm({ ...form, name })} />
       <View style={styles.twoCols}>
         <PickerLike label="类型" value={form.pointType} options={[['pickup', '取货点'], ['dropoff', '送货点'], ['handover', '交接点']].map(([value, label]) => ({ value, label }))} onChange={(pointType) => setForm({ ...form, pointType })} />
@@ -1119,19 +1168,43 @@ function MapCard({ vehicles = [], points = [], tasks = [], pickMode = false, onP
   ]).filter(Boolean)
   const markers = [
     ...points.map((point) => ({
-      x: coordFrom(point.x, point.mapX, point.map_x),
-      y: coordFrom(point.y, point.mapY, point.map_y),
+      ...markerPosition({
+        xValues: [point.x, point.mapX, point.map_x],
+        yValues: [point.y, point.mapY, point.map_y],
+        latValues: [point.lat, point.latitude],
+        lngValues: [point.lng, point.longitude],
+      }),
       label: point.pointType === 'dropoff' || point.point_type === 'dropoff' ? '送' : '取',
       tone: 'point',
     })),
     ...vehicles.map((vehicle) => ({
-      x: coordFrom(vehicle.currentX, vehicle.current_x, vehicle.x),
-      y: coordFrom(vehicle.currentY, vehicle.current_y, vehicle.y),
+      ...markerPosition({
+        xValues: [vehicle.currentX, vehicle.current_x, vehicle.x],
+        yValues: [vehicle.currentY, vehicle.current_y, vehicle.y],
+        latValues: [vehicle.currentLat, vehicle.current_lat, vehicle.lat],
+        lngValues: [vehicle.currentLng, vehicle.current_lng, vehicle.lng],
+      }),
       label: vehicle.code?.replace('FLC-', '') || '车',
       tone: 'vehicle',
     })),
-    ...taskPoints.map((point) => ({ ...point, x: coordFrom(point.x, point.mapX, point.map_x), y: coordFrom(point.y, point.mapY, point.map_y) })),
-    ...extraMarkers.map((point) => ({ ...point, x: coordFrom(point.x, point.mapX, point.map_x), y: coordFrom(point.y, point.mapY, point.map_y) })),
+    ...taskPoints.map((point) => ({
+      ...point,
+      ...markerPosition({
+        xValues: [point.x, point.mapX, point.map_x],
+        yValues: [point.y, point.mapY, point.map_y],
+        latValues: [point.lat, point.latitude],
+        lngValues: [point.lng, point.longitude],
+      }),
+    })),
+    ...extraMarkers.map((point) => ({
+      ...point,
+      ...markerPosition({
+        xValues: [point.x, point.mapX, point.map_x],
+        yValues: [point.y, point.mapY, point.map_y],
+        latValues: [point.lat, point.latitude],
+        lngValues: [point.lng, point.longitude],
+      }),
+    })),
   ].filter((item) => item.x !== null && item.y !== null)
 
   return (

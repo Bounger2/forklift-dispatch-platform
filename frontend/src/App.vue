@@ -2241,7 +2241,7 @@ function fillPoint(point) {
   pointForm.lng = point.lng ?? ''
   pointForm.geofenceRadius = point.geofenceRadius
   pointForm.contact = point.contact
-  draftPoint.value = { x: point.x, y: point.y }
+  draftPoint.value = { x: point.x, y: point.y, lat: point.lat ?? '', lng: point.lng ?? '' }
 }
 
 function resetPointForm() {

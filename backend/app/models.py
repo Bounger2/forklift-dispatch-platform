@@ -130,6 +130,13 @@ class Forklift(Base, TimestampMixin):
 
     def to_dict(self):
         energy_level = self.fuel_level if self.power_type in {"diesel", "gasoline", "lpg"} else self.battery_level
+        latest_position = max(
+            self.positions,
+            key=lambda row: (row.recorded_at or datetime.min, row.id or 0),
+            default=None,
+        )
+        current_lat = latest_position.lat if latest_position else None
+        current_lng = latest_position.lng if latest_position else None
         return {
             "id": self.id,
             "code": self.code,
@@ -145,6 +152,10 @@ class Forklift(Base, TimestampMixin):
             "currentArea": self.current_area,
             "x": round(self.current_x, 2),
             "y": round(self.current_y, 2),
+            "lat": current_lat,
+            "lng": current_lng,
+            "currentLat": current_lat,
+            "currentLng": current_lng,
             "heading": round(self.heading, 1),
             "speed": round(self.speed, 1),
             "lastSeenAt": self.last_seen_at.isoformat() if self.last_seen_at else None,
