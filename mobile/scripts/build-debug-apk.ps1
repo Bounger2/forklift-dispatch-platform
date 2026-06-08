@@ -1,6 +1,8 @@
 param(
   [string]$EnvRoot = "",
   [string]$TempBuildRoot = "",
+  [ValidateSet("Debug", "Release")]
+  [string]$BuildType = "Debug",
   [switch]$UseProxy,
   [switch]$NoAsciiDrive
 )
@@ -110,7 +112,7 @@ try {
 
   Push-Location (Join-Path $mobileRoot "android")
   try {
-    & $gradleBin --no-daemon --console plain :app:assembleDebug
+    & $gradleBin --no-daemon --console plain ":app:assemble$BuildType"
     if ($LASTEXITCODE -ne 0) {
       throw "Gradle failed with exit code $LASTEXITCODE"
     }
@@ -118,14 +120,15 @@ try {
     Pop-Location
   }
 
-  $apkSource = Join-Path $mobileRoot "android\app\build\outputs\apk\debug\app-debug.apk"
+  $apkVariant = $BuildType.ToLowerInvariant()
+  $apkSource = Join-Path $mobileRoot "android\app\build\outputs\apk\$apkVariant\app-$apkVariant.apk"
   if (-not (Test-Path $apkSource)) {
     throw "APK not found after build: $apkSource"
   }
 
   $apkDir = Join-Path $originalMobileRoot "apk"
   New-Item -ItemType Directory -Force $apkDir | Out-Null
-  $apkOutput = Join-Path $apkDir "forklift-dispatch-debug.apk"
+  $apkOutput = Join-Path $apkDir "forklift-dispatch-$apkVariant.apk"
   Copy-Item -LiteralPath $apkSource -Destination $apkOutput -Force
   Write-Host "APK exported: $apkOutput"
   $buildSucceeded = $true
