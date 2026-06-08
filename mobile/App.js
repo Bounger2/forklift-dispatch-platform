@@ -289,9 +289,20 @@ export default function App() {
           <Text style={styles.pageTitle}>{tabs.find((item) => item[0] === tab)?.[1] || '调度平台'}</Text>
           <Text style={styles.muted}>{user.name} · {user.role === 'admin' ? '管理员' : '司机'}</Text>
         </View>
-        <Pressable style={styles.iconBtn} onPress={refresh}>
-          <MaterialCommunityIcons name="refresh" color={colors.primary} size={22} />
-        </Pressable>
+        <View style={styles.topActions}>
+          <Pressable style={styles.iconBtn} onPress={refresh}>
+            <MaterialCommunityIcons name="refresh" color={colors.primary} size={22} />
+          </Pressable>
+          <Pressable
+            style={[styles.iconBtn, styles.logoutBtn]}
+            onPress={() => Alert.alert('退出登录', '确认退出当前账号？', [
+              { text: '取消', style: 'cancel' },
+              { text: '退出', style: 'destructive', onPress: signOut },
+            ])}
+          >
+            <MaterialCommunityIcons name="logout" color={colors.danger} size={22} />
+          </Pressable>
+        </View>
       </View>
       {!!errorText && <Text style={styles.inlineError}>{errorText}</Text>}
       <ScrollView
@@ -1293,7 +1304,9 @@ const styles = StyleSheet.create({
   apiHint: { marginTop: 14, color: colors.muted, fontSize: 12 },
   topBar: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.bg },
   pageTitle: { color: colors.ink, fontSize: 26, fontWeight: '900' },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
+  logoutBtn: { backgroundColor: '#f7e3e3' },
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 14, paddingBottom: 110 },
   tabBar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', backgroundColor: colors.card, borderRadius: 18, padding: 8, ...shadow },
