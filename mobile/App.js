@@ -330,7 +330,7 @@ function DispatchApp() {
   const [refreshing, setRefreshing] = useState(false)
   const [errorText, setErrorText] = useState('')
 
-  const [overview, setOverview] = useState({ metrics: {}, vehicles: [], tasks: [], alerts: [], mapPoints: [], driverGantt: [] })
+  const [overview, setOverview] = useState({ metrics: {}, vehicles: [], tasks: [], alerts: [], mapPoints: [], driverGantt: { date: '', rows: [] } })
   const [tasks, setTasks] = useState([])
   const [points, setPoints] = useState([])
   const [vehicles, setVehicles] = useState([])
@@ -554,7 +554,13 @@ function DispatchApp() {
 
 function OverviewScreen({ overview, tasks, alerts }) {
   const metrics = overview.metrics || {}
-  const pending = tasks.filter((task) => ['pending_dispatch', 'assigned'].includes(task.status))
+  const overviewTasks = (overview.tasks || []).length ? overview.tasks : tasks
+  const pending = overviewTasks.filter((task) => ['pending_review', 'pending_dispatch', 'exception'].includes(task.status))
+  const totalTasks = metrics.totalTasks ?? metrics.todayTasks ?? 0
+  const pendingTasks = metrics.pendingTasks ?? pending.length
+  const activeTasks = metrics.activeTasks ?? metrics.executingTasks ?? 0
+  const usableForklifts = metrics.usableForklifts ?? metrics.availableForklifts ?? 0
+  const ganttRows = Array.isArray(overview.driverGantt) ? overview.driverGantt : (overview.driverGantt?.rows || [])
   return (
     <View>
       <HeroBanner
@@ -564,19 +570,19 @@ function OverviewScreen({ overview, tasks, alerts }) {
         icon="forklift"
         stats={[
           ['在线叉车', metrics.onlineForklifts ?? 0],
-          ['待处理', pending.length],
+          ['待处理', pendingTasks],
           ['开放异常', metrics.openAlerts ?? 0],
         ]}
       />
       <View style={styles.statsGrid}>
-        <StatCard label="今日任务" value={metrics.todayTasks ?? 0} sub={`完成率 ${metrics.completionRate ?? 0}%`} />
-        <StatCard label="执行中" value={metrics.executingTasks ?? 0} sub="已派单/运输中" />
-        <StatCard label="可用叉车" value={metrics.availableForklifts ?? 0} sub={`在线 ${metrics.onlineForklifts ?? 0} 台`} />
+        <StatCard label="今日任务" value={totalTasks} sub={`完成率 ${metrics.completionRate ?? 0}%`} />
+        <StatCard label="执行中" value={activeTasks} sub="已派单/运输中" />
+        <StatCard label="可用叉车" value={usableForklifts} sub={`在线 ${metrics.onlineForklifts ?? 0} 台`} />
         <StatCard label="开放异常" value={metrics.openAlerts ?? 0} sub="需闭环处理" />
       </View>
       <MapCard vehicles={overview.vehicles || []} points={overview.mapPoints || []} tasks={pending} />
       <Card title="司机当天任务甘特图">
-        <Gantt rows={overview.driverGantt || []} />
+        <Gantt rows={ganttRows} />
       </Card>
       <Card title="待处理任务">
         {pending.slice(0, 8).map((task) => <TaskRow key={task.id} task={task} compact />)}
@@ -1329,6 +1335,22 @@ function TaskRow({ task, children, compact }) {
 
 function Gantt({ rows }) {
   if (!rows.length) return <Text style={styles.muted}>今天暂无司机任务分布</Text>
+  const segmentStyle = (seg) => {
+    const directLeft = optionalNumber(seg.left ?? seg.startPercent)
+    const directWidth = optionalNumber(seg.width ?? seg.durationPercent)
+    if (directLeft !== null || directWidth !== null) {
+      return {
+        left: `${Math.max(0, Math.min(100, directLeft ?? 0))}%`,
+        width: `${Math.max(2, Math.min(100, directWidth ?? 5))}%`,
+      }
+    }
+    const start = Math.max(0, Math.min(1440, safeNumber(seg.startMinutes)))
+    const end = Math.max(start + 1, Math.min(1440, safeNumber(seg.endMinutes, start + 5)))
+    return {
+      left: `${(start / 1440) * 100}%`,
+      width: `${Math.max(2, ((end - start) / 1440) * 100)}%`,
+    }
+  }
   return rows.map((row, index) => (
     <View key={row.driverId || index} style={styles.ganttRow}>
       <Text style={styles.ganttName}>{row.driverName || row.name}</Text>
@@ -1338,10 +1360,7 @@ function Gantt({ rows }) {
             key={i}
             style={[
               styles.ganttSeg,
-              {
-                left: `${Math.max(0, Math.min(100, seg.left || seg.startPercent || 0))}%`,
-                width: `${Math.max(2, Math.min(100, seg.width || seg.durationPercent || 5))}%`,
-              },
+              segmentStyle(seg),
             ]}
           />
         ))}
